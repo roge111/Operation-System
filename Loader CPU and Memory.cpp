@@ -114,16 +114,46 @@ void randomReadTest(const std::string& filename) {
     std::cout << "Delay time for random reading: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms\n";
 }
 
+const size_t FILE_SIZE = static_cast<size_t>(1024) * 1024 * 1024; // Размер файла 1 ГБ
+const size_t NUM_READS = 1000; // Количество случайных чтений
+
+void createTestFile(const std::string& filename) {
+
+    std::cout << "Start create file.";
+     std::ofstream ofs(filename, std::ios::binary);
+    std::vector<char> buffer(BLOCK_SIZE);
+
+    // Инициализация генератора случайных чисел
+    std::srand(static_cast<unsigned int>(std::time(0)));
+
+    size_t totalWritten = 0;
+
+    // Заполнение файла данными
+
+    while (totalWritten < FILE_SIZE) {
+        // Генерация случайных данных для буфера
+        for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+            buffer[i] = static_cast<char>(std::rand() % 256); // Генерация случайного байта
+        }
+
+        // Запись буфера в файл
+        ofs.write(buffer.data(), BLOCK_SIZE);
+        totalWritten += BLOCK_SIZE;
+    }
+
+    ofs.close();
+    std::cout << "\n";
+    std::cout << "File " << filename << " created (1 GB)." << std::endl;
+
+}
+
 int main() {
     std::string filename = "memoryLoader.dat";
     int createFile;
     std::cout << "Create a new file? (1 (Y)/ 0 (N)) >> ";
     std::cin >> createFile;
     if (createFile == 1) {
-        std::ofstream ofs(filename, std::ios::binary);
-        std::vector<char> buffer(BLOCK_SIZE, 'A');
-        for (size_t i = 0; i < 1024; ++i) ofs.write(buffer.data(), BLOCK_SIZE);
-        std::cout << "File created.\n";
+        createTestFile(filename);
     }
 
     int countThreadsMemory, countThreadsCPU;
