@@ -3,6 +3,47 @@
 ФИО студента: Батаргин Егор Александрович
 Группа: P3332
 
+## Задание
+
+![Задание](https://github.com/user-attachments/assets/962513e2-616e-4b5e-87fe-6de14678f686)
+
+## Оболчка Shell
+
+Оболчка Shell находиться в фалй main и выполняет две команды: echo и type в зависиммости от того, что напищшет пользователь.
+
+        void runWindows(const char* command, int countThreadsMemory, int countThreadsCPU) {
+                    STARTUPINFO si;
+                    PROCESS_INFORMATION pi;
+                
+                    ZeroMemory(&si, sizeof(si));
+                    si.cb = sizeof(si);
+                    ZeroMemory(&pi, sizeof(pi));
+                
+                    
+                
+                    
+                    auto start = std::chrono::high_resolution_clock::now();
+                
+                    std::string cmd = "cmd.exe /C " + std::string(command);
+                
+                    if (!CreateProcess("C:\\Windows\\System32\\cmd.exe", 
+                            (LPSTR)cmd.c_str(),
+                            NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+                        std::cerr << "CreateProcess failed. Error: " << GetLastError() << "\n";
+                    } else {
+                        WaitForSingleObject(pi.hProcess, INFINITE);
+                        CloseHandle(pi.hProcess);
+                        CloseHandle(pi.hThread);
+                        std::cout << "Successfully!\n";
+                    }
+                
+                    auto end = std::chrono::high_resolution_clock::now();
+                    std::chrono::duration<double> elapsed_seconds = end - start;
+                    std::cout << "Work time is " << elapsed_seconds.count() << " seconds\n";
+                }
+
+Запускает системную команду через CreateProcess используя комадную строку. Так же измеряет время работы.
+
 ## Нагрзучик памяти и CPU
 
 Программа в фале LoaderCPUandMemory.cpp - это код, который предназначен для исследования того, как влияет количество запущенных нагрузчиков либо на чтение данных с дисковой памяти, либо на сортировку сгенерированного массива размером 1000.
