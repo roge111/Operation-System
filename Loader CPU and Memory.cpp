@@ -46,8 +46,6 @@ void printCPUUsage(const CPUUsage& before, const CPUUsage& after) {
     avgUser += userPercent;
     avgSys += systemPercent;
     avgWait += waitPercent;
-
-   // std::cout << "USER%: " << userPercent << "%, SYS%: " << systemPercent << "%, WAIT%: " << waitPercent << "%\n";
 }
 
 void monitorCPU(bool& running) {
@@ -163,26 +161,9 @@ void createTestFile(const std::string& filename) {
 int main(int argc, char* argv[]) {
     
     std::string filename = "memoryLoader.dat";
-    // int createFile;
-    // std::cout << "Create a new file? (1 (Y)/ 0 (N)) >> ";
-    // std::cin >> createFile;
-    // if (createFile == 1) {
-    //     createTestFile(filename);
-    // }
     
     int countThreadsMemory = std::stoi(argv[1]);
     int countThreadsCPU = std::stoi(argv[2]);
-    //std::cout << countThreadsMemory << countThreadsCPU << "\n";
-   
-
-        
-
-
-        std::string filenameOut = "outputCPP.txt";
-        
-
-        std::ofstream outFile;
-        outFile.open(filenameOut);
 
         if (!outFile) {
             std::cerr << "Cannot open file!" << std::endl;
@@ -190,13 +171,7 @@ int main(int argc, char* argv[]) {
         }
 
         
-
-
-        
-        // std::this_thread::sleep_for(std::chrono::seconds(30));
-        
         double result = 0.0;
-        // LONG contextSwitches = 0.0;
         
         
         
@@ -222,7 +197,6 @@ int main(int argc, char* argv[]) {
             }
 
             if (countThreadsCPU > 0) delayTimeCPU += startLoaderCPU(countThreadsCPU);
-            // contextSwitches += getContextSwitches();
 
             for (auto& th : threads) th.join();
 
@@ -237,23 +211,10 @@ int main(int argc, char* argv[]) {
             running = false;
             monitorThread.join();
             
-        
-
-        outFile << countThreadsMemory << " " << countThreadsCPU << " "<< result << " " << avgUser << " " << avgSys << " " <<  avgWait << std::endl;
         std::cout << countThreadsMemory << " " << countThreadsCPU << " "<< result << " " << avgUser << " " << avgSys << " " <<  avgWait << std::endl;
         
-
-        
-
-        
-        outFile.close();
-    
     
 
-
-    
-
-    
 
     return 0;
 }
