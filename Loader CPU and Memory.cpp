@@ -1,8 +1,4 @@
-// Сделать время измерения отдельно для сортировки, отдельно для чтения. (Исправлено)
-// Создавать отдельно потоки для сортировки, отдельно для памяти (Исправлено)
-// Реализовать возможность запуска их одновременно (Исправлено)
-//Парметры WAIT%, USER%, SYS%  - измерять сначало зависимость от изменения потоков на CPU, потом на Memory (Исправлено)
-// Нет смысла создавать большое количество потоков на компьютер с 12-ю логическими процессами.
+
 
 
 //Код был сделан более читабельным, в меру оптимизирован с добавление заметок выше
@@ -18,39 +14,50 @@
 #include <sstream>
 #include <string>
 #include <unistd.h>
+#include <windows.h>
+#include <utility> // Для std::pair
+#include <atomic>
+
 
 struct CPUUsage {
-    long user, nice, system, idle, iowait, irq, softirq, steal, guest, guest_nice;
+    ULARGE_INTEGER idleTime, kernelTime, userTime;
 };
-
+double avgUser = 0.0, avgSys = 0.0, avgWait = 0.0;
 CPUUsage getCPUUsage() {
-    CPUUsage cpuUsage;
-    std::ifstream file("/proc/stat");
-    std::string line;
-    if (std::getline(file, line)) {
-        std::istringstream ss(line);
-        std::string cpu;
-        ss >> cpu >> cpuUsage.user >> cpuUsage.nice >> cpuUsage.system >> cpuUsage.idle
-           >> cpuUsage.iowait >> cpuUsage.irq >> cpuUsage.softirq >> cpuUsage.steal
-           >> cpuUsage.guest >> cpuUsage.guest_nice;
-    }
-    return cpuUsage;
+    CPUUsage usage;
+    FILETIME idle, kernel, user;
+    GetSystemTimes(&idle, &kernel, &user);
+    usage.idleTime.QuadPart = reinterpret_cast<ULARGE_INTEGER*>(&idle)->QuadPart;
+    usage.kernelTime.QuadPart = reinterpret_cast<ULARGE_INTEGER*>(&kernel)->QuadPart;
+    usage.userTime.QuadPart = reinterpret_cast<ULARGE_INTEGER*>(&user)->QuadPart;
+    return usage;
 }
 
 void printCPUUsage(const CPUUsage& before, const CPUUsage& after) {
-    long totalBefore = before.user + before.nice + before.system + before.idle + before.iowait + before.irq + before.softirq + before.steal;
-    long totalAfter = after.user + after.nice + after.system + after.idle + after.iowait + after.irq + after.softirq + after.steal;
+    ULONGLONG idleDiff = after.idleTime.QuadPart - before.idleTime.QuadPart;
+    ULONGLONG kernelDiff = after.kernelTime.QuadPart - before.kernelTime.QuadPart;
+    ULONGLONG userDiff = after.userTime.QuadPart - before.userTime.QuadPart;
+    ULONGLONG totalDiff = kernelDiff + userDiff;
 
-    long totalDiff = totalAfter - totalBefore;
-    long userDiff = after.user - before.user;
-    long systemDiff = after.system - before.system;
-    long waitDiff = after.iowait - before.iowait;
+    double userPercent = static_cast<double>(userDiff) / totalDiff * 100.0;
+    double systemPercent = static_cast<double>(kernelDiff - idleDiff) / totalDiff * 100.0;
+    double waitPercent = static_cast<double>(idleDiff) / totalDiff * 100.0;
 
-    double userPercent = (static_cast<double>(userDiff) / totalDiff) * 100.0;
-    double systemPercent = (static_cast<double>(systemDiff) / totalDiff) * 100.0;
-    double waitPercent = (static_cast<double>(waitDiff) / totalDiff) * 100.0;
+    avgUser += userPercent;
+    avgSys += systemPercent;
+    avgWait += waitPercent;
 
-    std::cout << "USER%: " << userPercent << "%, SYS%: " << systemPercent << "%, WAIT%: " << waitPercent << "%" << std::endl;
+   // std::cout << "USER%: " << userPercent << "%, SYS%: " << systemPercent << "%, WAIT%: " << waitPercent << "%\n";
+}
+
+void monitorCPU(bool& running) {
+    CPUUsage before = getCPUUsage();
+    while (running) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        CPUUsage after = getCPUUsage();
+        printCPUUsage(before, after);
+        before = after;
+    }
 }
 
 
@@ -88,7 +95,7 @@ void mergeSort(int arr[], int left, int right, int maxThreads) {
     }
 }
 
-void startLoaderCPU(int countThreads) {
+double startLoaderCPU(int countThreads) {
     const int SIZE = 1000;
     int arr[SIZE];
     std::generate(arr, arr + SIZE, []() { return std::rand(); });
@@ -98,23 +105,28 @@ void startLoaderCPU(int countThreads) {
     sortingThread.join();  // Дожидаемся завершения сортировки
     auto end = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Delay time for sorting: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms\n";
+    return std::chrono::duration<double, std::milli>(end - start).count(); // Возвращаем время в миллисекундах
 }
 
 const size_t BLOCK_SIZE = 1024 * 1024;
-void randomReadTest(const std::string& filename) {
+const size_t FILE_SIZE = static_cast<size_t>(1024) * 1024 * 1024; // Размер файла 1 ГБ
+
+ randomReadTest(const std::string& filename) {
     std::ifstream ifs(filename, std::ios::binary);
+    if (!ifs) return 0.0;
+
     std::vector<char> buffer(BLOCK_SIZE);
+    ifs.seekg(std::rand() % (FILE_SIZE - BLOCK_SIZE));
 
     auto start = std::chrono::high_resolution_clock::now();
-    ifs.seekg(std::rand() % 100);
+    
     ifs.read(buffer.data(), BLOCK_SIZE);
+    
     auto end = std::chrono::high_resolution_clock::now();
-
-    std::cout << "Delay time for random reading: " << std::chrono::duration<double, std::milli>(end - start).count() << " ms\n";
+    return std::chrono::duration<double, std::milli>(end - start).count();
 }
 
-const size_t FILE_SIZE = static_cast<size_t>(1024) * 1024 * 1024; // Размер файла 1 ГБ
+
 const size_t NUM_READS = 1000; // Количество случайных чтений
 
 void createTestFile(const std::string& filename) {
@@ -129,6 +141,7 @@ void createTestFile(const std::string& filename) {
     size_t totalWritten = 0;
 
     // Заполнение файла данными
+
 
     while (totalWritten < FILE_SIZE) {
         // Генерация случайных данных для буфера
@@ -147,31 +160,100 @@ void createTestFile(const std::string& filename) {
 
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    
     std::string filename = "memoryLoader.dat";
-    int createFile;
-    std::cout << "Create a new file? (1 (Y)/ 0 (N)) >> ";
-    std::cin >> createFile;
-    if (createFile == 1) {
-        createTestFile(filename);
-    }
+    // int createFile;
+    // std::cout << "Create a new file? (1 (Y)/ 0 (N)) >> ";
+    // std::cin >> createFile;
+    // if (createFile == 1) {
+    //     createTestFile(filename);
+    // }
+    
+    int countThreadsMemory = std::stoi(argv[1]);
+    int countThreadsCPU = std::stoi(argv[2]);
+    //std::cout << countThreadsMemory << countThreadsCPU << "\n";
+   
 
-    int countThreadsMemory, countThreadsCPU;
-    std::cout << "Enter the number of threads for Memory: ";
-    std::cin >> countThreadsMemory;
-    std::cout << "Enter the number of threads for CPU: ";
-    std::cin >> countThreadsCPU;
+        
 
-    CPUUsage before = getCPUUsage();
 
-    std::vector<std::thread> threads;
-    for (int i = 0; i < countThreadsMemory; i++) threads.emplace_back(randomReadTest, filename);
-    if (countThreadsCPU > 0) startLoaderCPU(countThreadsCPU);
+        std::string filenameOut = "outputCPP.txt";
+        
 
-    for (auto& th : threads) th.join();
+        std::ofstream outFile;
+        outFile.open(filenameOut);
 
-    CPUUsage after = getCPUUsage();
-    printCPUUsage(before, after);
+        if (!outFile) {
+            std::cerr << "Cannot open file!" << std::endl;
+            return 1; // Завершаем программу с ошибкой
+        }
+
+        
+
+
+        
+        // std::this_thread::sleep_for(std::chrono::seconds(30));
+        
+        double result = 0.0;
+        // LONG contextSwitches = 0.0;
+        
+        
+        
+            double delayTimeMemory = 0.0;
+            double delayTimeCPU = 0.0;
+            
+            
+            bool running = true;
+            std::thread monitorThread(monitorCPU, std::ref(running));
+
+            
+            std::vector<std::thread> threads;
+            std::vector<double> times(countThreadsMemory);
+            if (countThreadsMemory > 0){
+                
+                
+                for (int j = 0; j < countThreadsMemory; j++) {
+                    threads.emplace_back([&times, j, &filename]() {
+                        times[j] = randomReadTest(filename);
+                    });
+                }
+                
+            }
+
+            if (countThreadsCPU > 0) delayTimeCPU += startLoaderCPU(countThreadsCPU);
+            // contextSwitches += getContextSwitches();
+
+            for (auto& th : threads) th.join();
+
+            for (const auto& time : times) delayTimeMemory += time;
+            if (countThreadsMemory > 0) {
+                result += delayTimeMemory/countThreadsMemory + delayTimeCPU;
+            } else {
+                result += delayTimeCPU;
+            }
+            
+
+            running = false;
+            monitorThread.join();
+            
+        
+
+        outFile << countThreadsMemory << " " << countThreadsCPU << " "<< result << " " << avgUser << " " << avgSys << " " <<  avgWait << std::endl;
+        std::cout << countThreadsMemory << " " << countThreadsCPU << " "<< result << " " << avgUser << " " << avgSys << " " <<  avgWait << std::endl;
+        
+
+        
+
+        
+        outFile.close();
+    
+    
+
+
+    
+
+    
 
     return 0;
 }
