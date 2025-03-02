@@ -122,63 +122,50 @@ WAIT% - сколько времени CPU простаивает в режиме
         while (j < n2) arr[k++] = R[j++];
     }
 
-Текущая функци реализует сортировку методом слияния. Такая сортировка выбрана так как лучше всего подходит для сортировки одновременно N-м количством потоков. Суть в том, что N-е количесвто поток должны сортировать один массив. 
+Текущая функция реализует сортировку пузырьком. Это лишь часть сортировки. Сортировка идет такми образом, что указанное количесвто потоков сортируют один массив параллельно. 
 
-    void mergeSort(int arr[], int left, int right, int maxThreads) {
-       if (left < right) {
-            int mid = left + (right - left) / 2;
-    
-            // Определяем количество доступных потоков
-            if (maxThreads > 1) {
-                std::thread leftThread(mergeSort, arr, left, mid, maxThreads / 2);
-                std::thread rightThread(mergeSort, arr, mid + 1, right, maxThreads / 2);
-    
-                leftThread.join();
-                rightThread.join();
-            } else {
-                mergeSort(arr, left, mid, 1);
-                mergeSort(arr, mid + 1, right, 1);
+            void bubbleSort(std::vector<int>& sublist){
+            int n = sublist.size();
+            for (int i = 0; i < n - 1; ++i){
+                for (int j = 0; j < n - i - 1; ++j ){
+                    if (sublist[j] >  sublist[j + 1]){
+                        std::swap(sublist[j], sublist[j + 1]);
+                    }
+                }
             }
-    
-            // Сливаем отсортированные половины
-            merge(arr, left, mid, right);
         }
-    }
+Метод marge_sorted_sublists объединяет все отсоритированные куски массива (подмассивы) в один массив 
 
-Метод mergeSort используется для запуска сортировки слиянием N-м количеством потоков. maxThreads - это и есть количество потоков. Запуск идет рекурсивно, разбивая массив каждый раз на две части. И в конце идет слияние отосортированных частей. Такми образом к концу выполнения первого запуска mergeSort мы получаем отосртированный массив. Такая работа сделана для оптимизации сортировки, чтобы несколько потоков сортировало один массив. 
+        std::vector<int> merge_sorted_sublists(const std::vector<std::vector<int>>& sorted_sublists) {
+            std::vector<int> result;
+            for (const auto& sublist : sorted_sublists) {
+                result.insert(result.end(), sublist.begin(), sublist.end());
+            }
+            std::sort(result.begin(), result.end());
+            return result;
+        }
 
-      double startLoaderCPU(int countThreads) {
-        const int SIZE = 1000;
-        int arr[SIZE];
-        std::generate(arr, arr + SIZE, []() { return std::rand(); });
-    
-        auto start = std::chrono::high_resolution_clock::now();
-        std::thread sortingThread(mergeSort, arr, 0, SIZE - 1, countThreads);
-        sortingThread.join();  // Дожидаемся завершения сортировки
-        auto end = std::chrono::high_resolution_clock::now();
-    
-        return std::chrono::duration<double, std::milli>(end - start).count(); // Возвращаем время в миллисекундах
-    }
+splitList - обратная функция. Нужна для разделения одного списка на подмассивы. Количесвто подмассивов - count_threads
 
-startLoaderCPU - функция, отвечающая за запуск сортировки. Название такое данно, поскольку по задаче - это нагрузчик на CPU. В данной функции идет измерение времени всей сортировки через std::chrono и возврат этого времени
-
-    const size_t BLOCK_SIZE = 1024 * 1024;
-    const size_t FILE_SIZE = static_cast<size_t>(1024) * 1024 * 1024; // Размер файла 1 ГБ
-    
-     randomReadTest(const std::string& filename) {
-        std::ifstream ifs(filename, std::ios::binary);
-        if (!ifs) return 0.0;
-    
-        std::vector<char> buffer(BLOCK_SIZE);
-        ifs.seekg(std::rand() % (FILE_SIZE - BLOCK_SIZE));
-    
-        auto start = std::chrono::high_resolution_clock::now();
+        std::vector<std::vector<int>> splitList(std::vector<int>& data, int count_threads){
         
-        ifs.read(buffer.data(), BLOCK_SIZE);
+            std::vector<std::vector<int>> sublist (count_threads);
         
-        auto end = std::chrono::high_resolution_clock::now();
-        return std::chrono::duration<double, std::milli>(end - start).count();
-    }
+            int split_size = data.size()/count_threads;
+        
+            int remainder = data.size() % count_threads;
+            int start = 0;
+        
+            for (int i = 0; i < count_threads; ++i){
+                int end = start + split_size + (i < remainder ? 1 : 0);
+                sublist[i].assign(data.begin() + start, data.begin() + end);
+                start = end;
+            }
+            return sublist;
+        
+        
+        }
+
 
 randomReadTest - выполняет чтение файла объемом не менее 1Гб из диска. Сделано для того, чтобы измерять задержки чтения с дисковой памяти. Чтение из файла идет блоком BLOCK_SIZE из рандомной точки файла. За это отвечает _ifs.seekg(std::rand() % (FILE_SIZE - BLOCK_SIZE));_. А само чтение идет с помощью    _ifs.read(buffer.data(), BLOCK_SIZE);_
 
