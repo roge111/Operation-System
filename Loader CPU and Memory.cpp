@@ -60,50 +60,76 @@ void monitorCPU(bool& running) {
 
 
 //Сортировка слиянием
-void merge(int arr[], int left, int mid, int right) {
-    int n1 = mid - left + 1, n2 = right - mid;
-    std::vector<int> L(arr + left, arr + left + n1);
-    std::vector<int> R(arr + mid + 1, arr + mid + 1 + n2);
-
-    int i = 0, j = 0, k = left;
-    while (i < n1 && j < n2) arr[k++] = (L[i] <= R[j]) ? L[i++] : R[j++];
-    while (i < n1) arr[k++] = L[i++];
-    while (j < n2) arr[k++] = R[j++];
-}
-
-//Запуск сортировки слияением с распределнием на потоки
-void mergeSort(int arr[], int left, int right, int maxThreads) {
-   if (left < right) {
-        int mid = left + (right - left) / 2;
-
-        // Определяем количество доступных потоков
-        if (maxThreads > 1) {
-            std::thread leftThread(mergeSort, arr, left, mid, maxThreads / 2);
-            std::thread rightThread(mergeSort, arr, mid + 1, right, maxThreads / 2);
-
-            leftThread.join();
-            rightThread.join();
-        } else {
-            mergeSort(arr, left, mid, 1);
-            mergeSort(arr, mid + 1, right, 1);
+void bubbleSort(std::vector<int>& sublist){
+    int n = sublist.size();
+    for (int i = 0; i < n - 1; ++i){
+        for (int j = 0; j < n - i - 1; ++j ){
+            if (sublist[j] >  sublist[j + 1]){
+                std::swap(sublist[j], sublist[j + 1]);
+            }
         }
-
-        // Сливаем отсортированные половины
-        merge(arr, left, mid, right);
     }
 }
 
-double startLoaderCPU(int countThreads) {
-    const int SIZE = 1000;
-    int arr[SIZE];
-    std::generate(arr, arr + SIZE, []() { return std::rand(); });
+
+std::vector<std::vector<int>> splitList(std::vector<int>& data, int count_threads){
+
+    std::vector<std::vector<int>> sublist (count_threads);
+
+    int split_size = data.size()/count_threads;
+
+    int remainder = data.size() % count_threads;
+    int start = 0;
+
+    for (int i = 0; i < count_threads; ++i){
+        int end = start + split_size + (i < remainder ? 1 : 0);
+        sublist[i].assign(data.begin() + start, data.begin() + end);
+        start = end;
+    }
+    return sublist;
+
+
+}
+
+
+// Функция, которая объединяет отсортированные подсписки в один отсортированный список
+std::vector<int> merge_sorted_sublists(const std::vector<std::vector<int>>& sorted_sublists) {
+    std::vector<int> result;
+    for (const auto& sublist : sorted_sublists) {
+        result.insert(result.end(), sublist.begin(), sublist.end());
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+double startLoaderCPU(int count_threads){
+    std::vector<int> list;
+    for (int i = 0; i < 100000; ++i) {
+        //std::cout << i + 1 << "\n";
+        list.push_back(rand() % 1000);
+    }
+
+    std::vector<std::vector<int>> sublists = splitList(list, count_threads);
+
+    std::vector<std::thread> threads;
 
     auto start = std::chrono::high_resolution_clock::now();
-    std::thread sortingThread(mergeSort, arr, 0, SIZE - 1, countThreads);
-    sortingThread.join();  // Дожидаемся завершения сортировки
-    auto end = std::chrono::high_resolution_clock::now();
 
-    return std::chrono::duration<double, std::milli>(end - start).count(); // Возвращаем время в миллисекундах
+    for (auto& sublist : sublists){
+        threads.emplace_back(bubbleSort, std::ref(sublist));
+    }
+
+    for (auto& thread : threads){
+        thread.join();
+    }
+
+    std::vector<int> sort_list = merge_sorted_sublists(sublists);
+
+
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double, std::milli>(end - start).count();
+
+    
 }
 
 const size_t BLOCK_SIZE = 1024 * 1024;
