@@ -111,18 +111,8 @@ WAIT% - сколько времени CPU простаивает в режиме
 
 Указанных выше три метода выполняют получение системных метрик USER%, SYS%, WAIT%. Переменные _avgUser, avgSys и avgWait_ хранят эти метрики соответсвенно
 
-      void merge(int arr[], int left, int mid, int right) {
-        int n1 = mid - left + 1, n2 = right - mid;
-        std::vector<int> L(arr + left, arr + left + n1);
-        std::vector<int> R(arr + mid + 1, arr + mid + 1 + n2);
-    
-        int i = 0, j = 0, k = left;
-        while (i < n1 && j < n2) arr[k++] = (L[i] <= R[j]) ? L[i++] : R[j++];
-        while (i < n1) arr[k++] = L[i++];
-        while (j < n2) arr[k++] = R[j++];
-    }
 
-Текущая функция реализует сортировку пузырьком. Это лишь часть сортировки. Сортировка идет такми образом, что указанное количесвто потоков сортируют один массив параллельно. 
+Текущая функция bubbleSort реализует сортировку пузырьком. Это лишь часть сортировки. Сортировка идет такми образом, что указанное количесвто потоков сортируют один массив параллельно. 
 
             void bubbleSort(std::vector<int>& sublist){
             int n = sublist.size();
